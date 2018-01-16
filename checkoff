@@ -70,8 +70,8 @@ def lab_completed_students(args, data):
         c.execute('SELECT `student`, `facilitator`, `timestamp` FROM `checkoffs`'
                   'WHERE `lab` = %s', lab)
 
-    print('Checkoffs for lab {} ({})'.format(
-        lab, data['labs'][lab]['fullname']))
+    print('Checkoffs for lab {} ({})'.format(lab, data['labs'][lab]['fullname']))
+
     for i in c:
         print('{} checked off by {} on {}'.format(
             i['student'], i['facilitator'], i['timestamp']
@@ -85,8 +85,8 @@ def student_completed_labs(args, data):
         c.execute('SELECT `lab`, `facilitator`, `timestamp` FROM `checkoffs`'
                   'WHERE `student` = %s', user)
 
-    print('Checkoffs for student {} (track: {})'.format(
-        user, data['roster'][user]))
+    print('Checkoffs for student {} (track: {})'.format(user, data['roster'][user]))
+
     for i in c:
         print('Lab {} checked off by {} on {}'.format(
             i['lab'], i['facilitator'], i['timestamp']
