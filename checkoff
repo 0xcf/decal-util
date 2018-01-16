@@ -1,46 +1,41 @@
 #!/usr/bin/env python3
 import argparse
 import getpass
-import json
 import subprocess
 import sys
 
+import configparser
 from ocflib.account.search import user_exists
 from ocflib.infra.db import get_connection
+from pymysql.err import IntegrityError
 
-MYSQL_PASSWORD_FILE = 'mysql_pwd'
-DATA_PATH = 'checkoff_data.json'
+MYSQL_CONFIG_FILE = 'mysql.conf'
 
-# Format of JSON file should be:
-# {
-#     "roster": {
-#         "username": "track",
-#         ...
-#     "labs": {
-#         "b1": {
-#             "fullname": "Introduction to UNIX",
-#             "track": "basic"
-#          },
-#         ...
-#     }
-# }
+
+def _db():
+    conf = configparser.ConfigParser()
+    conf.read(MYSQL_CONFIG_FILE)
+
+    return get_connection(
+        user=conf.get('mysql', 'user'),
+        password=conf.get('mysql', 'password'),
+        db=conf.get('mysql', 'db'),
+    )
 
 
 def _load_data():
-    with open(DATA_PATH, 'r') as f:
-        data = json.load(f)
-    return data
+    with _db() as c:
+        c.execute('SELECT `name`, `fullname`, `track` FROM `labs`')
 
+        labs = {i['name']: {'fullname': i['fullname'], 'track': i['track']}
+                for i in c}
 
-def db():
-    with open(MYSQL_PASSWORD_FILE, 'r') as f:
-        my_pwd = f.read()
+        c.execute('SELECT `username`, `name`, `track` FROM `students`')
 
-    return get_connection(
-        user='decal',
-        password=my_pwd,
-        db='decal'
-    )
+        roster = {i['username']: {'name': i['name'], 'track': i['track']}
+                  for i in c}
+
+    return {'labs': labs, 'roster': roster}
 
 
 def checkoff(args, data):
@@ -48,25 +43,35 @@ def checkoff(args, data):
     user = args.user
     facilitator = getpass.getuser()
 
-    # verify the user is in the track they're
-    # being checked off for
-    student_track = data['roster'][user]
+    # verify the user is in the track they're being checked off for
+    student_track = data['roster'][user]['track']
     lab_track = data['labs'][lab]['track']
-    assert student_track == lab_track, (
-        'student belongs to track {} but lab is for track {}'.format(student_track, lab_track))
+    if student_track != lab_track:
+        # returns into sys.exit, assert traceback is unnecessary
+        return 'error: student in track {} but lab for track {}'.format(
+            student_track, lab_track
+        )
 
-    with db() as c:
-        c.execute('INSERT INTO `checkoffs` (`lab`, `student`, `facilitator`)'
-                  'VALUES (%s, %s, %s)', (lab, user, facilitator))
+    try:
+        with _db() as c:
+            c.execute('INSERT INTO `checkoffs` (`lab`, `student`, `facilitator`)'
+                      'VALUES (%s, %s, %s)', (lab, user, facilitator))
 
-    print('Checked off {} for lab {}'.format(user, lab))
-    _mail_checkoff(user, lab, data)
+            _mail_checkoff(user, lab, data)
+            print('Checked {} off for lab {} and emailed them confirmation.'.format(
+                user, lab
+            ))
+
+    except IntegrityError as e:
+        # multiple checkoffs not allowed by the unique constraint on the table
+        print('Student probably already checked off.')
+        return e
 
 
 def lab_completed_students(args, data):
     lab = args.lab
 
-    with db() as c:
+    with _db() as c:
         c.execute('SELECT `student`, `facilitator`, `timestamp` FROM `checkoffs`'
                   'WHERE `lab` = %s', lab)
 
@@ -81,22 +86,28 @@ def lab_completed_students(args, data):
 def student_completed_labs(args, data):
     user = args.user
 
-    with db() as c:
+    with _db() as c:
         c.execute('SELECT `lab`, `facilitator`, `timestamp` FROM `checkoffs`'
                   'WHERE `student` = %s', user)
 
-    print('Checkoffs for student {} (track: {})'.format(user, data['roster'][user]))
+    print('Checkoffs for student {} ({}) (track: {})'.format(
+        data['roster'][user]['name'],
+        user,
+        data['roster'][user]['track'],
+    ))
 
     for i in c:
         print('Lab {} checked off by {} on {}'.format(
-            i['lab'], i['facilitator'], i['timestamp']
+            i['lab'],
+            i['facilitator'],
+            i['timestamp']
         ))
 
 
 def _mail_checkoff(user, lab, data):
     # subprocess needs input in bytes
     msg = 'Congratulations {}, you have been checked off for lab {} ({})'.format(
-        user, lab, data['labs'][lab]['fullname'],
+        data['roster'][user]['name'].split()[0], lab, data['labs'][lab]['fullname'],
     ).encode()
     subject = 'Unix SysAdmin DeCal Checkoff for Lab {}'.format(lab)
     recipient = '{}@ocf.berkeley.edu'.format(user)
@@ -109,13 +120,13 @@ def main(argv=None):
     data = _load_data()
 
     def validate_lab(lab):
-        if lab in data['labs'].keys():
+        if lab in data['labs']:
             return lab
         else:
             raise argparse.ArgumentTypeError('Invalid lab: {}'.format(lab))
 
     def validate_user(user):
-        if user in data['roster'].keys() and user_exists(user):
+        if user in data['roster'] and user_exists(user):
             return user
         else:
             raise argparse.ArgumentTypeError(
@@ -156,7 +167,7 @@ def main(argv=None):
     parser_checkoff.set_defaults(func=checkoff)
 
     args = parser.parse_args(argv)
-    args.func(args, data)
+    return args.func(args, data)
 
 
 if __name__ == '__main__':
