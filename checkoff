@@ -1,121 +1,29 @@
 #!/usr/bin/env python3
 import argparse
+import getpass
 import json
-import os
 import subprocess
 import sys
 
 from ocflib.account.search import user_exists
+from ocflib.infra.db import get_connection
 
+MYSQL_PASSWORD_FILE = 'mysql_pwd'
+DATA_PATH = 'checkoff_data.json'
 
 # Format of JSON file should be:
 # {
-#     "roster": [<list of OCF usernames of students>],
-#     "users": {
-#         "username1": [<list of labs checked off>],
+#     "roster": {
+#         "username": "track",
+#         ...
+#     "labs": {
+#         "b1": {
+#             "fullname": "Introduction to UNIX",
+#             "track": "basic"
+#          },
 #         ...
 #     }
 # }
-
-DATA_PATH = '/home/d/de/decal/checkoff_data.json'
-LOCK_FILE_PATH = DATA_PATH + '.lock'
-
-
-def checkoff(args):
-    # Can replace this with a spin-loop but figured this is alright for now
-    if not _acquire_lock():
-        print('Someone else is doing a checkoff right now, wait a second and rerun your command.')
-        return 1
-    try:
-        user = args.user
-        lab = args.lab
-        _check_lab_id(lab)
-
-        data = _load_data()
-        roster = data['roster']
-        users = data['users']
-
-        if user not in roster:
-            print('{} not in class roster'.format(user))
-            return 1
-
-        if user in users:
-            if lab in users[user]:
-                print('{} already checked off for lab {}'.format(user, lab))
-                return 1
-
-            users[user].append(lab)
-        else:
-            users[user] = [lab]
-
-        ans = input('OK to check off {} for lab {}? [y/N]\n'.format(user, lab))
-
-        if ans.lower() != 'y':
-            print('Cancelling checkoff')
-            return 1
-
-        print('Writing to data file...')
-        _write_data(data)
-        print('Mailing {}@ocf.berkeley.edu...'.format(user))
-        _mail_checkoff(user, lab)
-
-        print('{} has been checked off for lab {}'.format(user, lab))
-
-    finally:
-        _release_lock()
-
-
-def view(args):
-    user = args.user
-
-    data = _load_data()
-    roster = data['roster']
-    users = data['users']
-
-    if user not in roster:
-        print('{} not in class roster'.format(user))
-        return 1
-
-    completed_labs = []
-    if user in users:
-        completed_labs = sorted(users[user])
-
-    print('{} checked off for labs: {}'.format(user, completed_labs))
-
-
-def list_labs(args):
-    lab = args.lab
-    _check_lab_id(lab)
-
-    data = _load_data()
-    users = data['users']
-
-    for student in users:
-        if lab in users[student]:
-            print(student)
-
-
-def _acquire_lock():
-    # Atomically check and create lockfile
-    # https://stackoverflow.com/a/33223732/5194666
-    try:
-        os.open(LOCK_FILE_PATH, os.O_CREAT | os.O_EXCL)
-        return True
-    except FileExistsError:
-        return False
-
-
-def _release_lock():
-    os.remove(LOCK_FILE_PATH)
-
-
-def _mail_checkoff(user, lab):
-    # subprocess needs input in bytes
-    msg = 'Congratulations {}, you have been checked off for lab {}'.format(user, lab).encode()
-    subject = 'Unix Sysadmin Decal Checkoff for Lab {}'.format(lab)
-    recipient = '{}@ocf.berkeley.edu'.format(user)
-    cc = 'decal+checkoffs@ocf.berkeley.edu'
-    subprocess.run(['mail', '-s', subject, '-c', cc, recipient], stdout=subprocess.PIPE, input=msg)
 
 
 def _load_data():
@@ -124,44 +32,131 @@ def _load_data():
     return data
 
 
-def _write_data(data):
-    with open(DATA_PATH, 'w') as f:
-        json.dump(data, f)
+def db():
+    with open(MYSQL_PASSWORD_FILE, 'r') as f:
+        my_pwd = f.read()
+
+    return get_connection(
+        user='decal',
+        password=my_pwd,
+        db='decal'
+    )
 
 
-def _check_lab_id(lab):
-    if not lab.startswith('a') and not lab.startswith('b'):
-        raise ValueError('Lab "{}" not proper format (must start with a or b)'.format(lab))
+def checkoff(args, data):
+    lab = args.lab
+    user = args.user
+    facilitator = getpass.getuser()
+
+    # verify the user is in the track they're
+    # being checked off for
+    student_track = data['roster'][user]
+    lab_track = data['labs'][lab]['track']
+    assert student_track == lab_track, (
+        'student belongs to track {} but lab is for track {}'.format(student_track, lab_track))
+
+    with db() as c:
+        c.execute('INSERT INTO `checkoffs` (`lab`, `student`, `facilitator`)'
+                  'VALUES (%s, %s, %s)', (lab, user, facilitator))
+
+    print('Checked off {} for lab {}'.format(user, lab))
+    _mail_checkoff(user, lab, data)
+
+
+def lab_completed_students(args, data):
+    lab = args.lab
+
+    with db() as c:
+        c.execute('SELECT `student`, `facilitator`, `timestamp` FROM `checkoffs`'
+                  'WHERE `lab` = %s', lab)
+
+    print('Checkoffs for lab {} ({})'.format(
+        lab, data['labs'][lab]['fullname']))
+    for i in c:
+        print('{} checked off by {} on {}'.format(
+            i['student'], i['facilitator'], i['timestamp']
+        ))
+
+
+def student_completed_labs(args, data):
+    user = args.user
+
+    with db() as c:
+        c.execute('SELECT `lab`, `facilitator`, `timestamp` FROM `checkoffs`'
+                  'WHERE `student` = %s', user)
+
+    print('Checkoffs for student {} (track: {})'.format(
+        user, data['roster'][user]))
+    for i in c:
+        print('Lab {} checked off by {} on {}'.format(
+            i['lab'], i['facilitator'], i['timestamp']
+        ))
+
+
+def _mail_checkoff(user, lab, data):
+    # subprocess needs input in bytes
+    msg = 'Congratulations {}, you have been checked off for lab {} ({})'.format(
+        user, lab, data['labs'][lab]['fullname'],
+    ).encode()
+    subject = 'Unix SysAdmin DeCal Checkoff for Lab {}'.format(lab)
+    recipient = '{}@ocf.berkeley.edu'.format(user)
+    cc = 'decal+checkoffs@ocf.berkeley.edu'
+    subprocess.run(['mail', '-s', subject, '-c', cc, recipient],
+                   stdout=subprocess.PIPE, input=msg)
 
 
 def main(argv=None):
-    commands = {
-        'view': view,
-        'checkoff': checkoff,
-        'labs': list_labs,
-    }
+    data = _load_data()
 
-    parser = argparse.ArgumentParser(description='Checkoff script for OCF/XCF Unix Sysadmin Decal.')
+    def validate_lab(lab):
+        if lab in data['labs'].keys():
+            return lab
+        else:
+            raise argparse.ArgumentTypeError('Invalid lab: {}'.format(lab))
+
+    def validate_user(user):
+        if user in data['roster'].keys() and user_exists(user):
+            return user
+        else:
+            raise argparse.ArgumentTypeError(
+                'Username {} not enrolled or does not exist'.format(user))
+
+    parser = argparse.ArgumentParser(
+        description='Checkoff script for OCF/XCF UNIX SysAdmin DeCal.'
+    )
     subparsers = parser.add_subparsers(dest='command', help='command to run')
     subparsers.required = True
 
-    parser_view = subparsers.add_parser('view', help='view a student\'s completed labs')
-    parser_view.add_argument('user', type=str, help='OCF username of the student')
+    parser_view = subparsers.add_parser(
+        'view', help='view a student\'s completed labs'
+    )
+    parser_view.add_argument(
+        'user', type=validate_user, help='OCF username of the student'
+    )
+    parser_view.set_defaults(func=student_completed_labs)
 
-    parser_labs = subparsers.add_parser('labs', help='list students who completed specified lab')
-    parser_labs.add_argument('lab', type=str, help='lab identifier (e.g. a1, b1)')
+    parser_labs = subparsers.add_parser(
+        'labs',
+        help='view students who have completed the specified lab'
+    )
+    parser_labs.add_argument(
+        'lab', type=validate_lab, help='lab identifier (e.g. a1, b1)'
+    )
+    parser_labs.set_defaults(func=lab_completed_students)
 
-    parser_checkoff = subparsers.add_parser('checkoff', help='checkoff a student for a lab')
-    parser_checkoff.add_argument('user', type=str, help='OCF username of the student')
-    parser_checkoff.add_argument('lab', type=str, help='lab identifier (e.g. a1, b1)')
+    parser_checkoff = subparsers.add_parser(
+        'checkoff', help='checkoff a student for a lab'
+    )
+    parser_checkoff.add_argument(
+        'user', type=validate_user, help='OCF username of student'
+    )
+    parser_checkoff.add_argument(
+        'lab', type=validate_lab, help='lab identifier (e.g. a1, b1)'
+    )
+    parser_checkoff.set_defaults(func=checkoff)
 
     args = parser.parse_args(argv)
-
-    if 'user' in args and not user_exists(args.user):
-        print('Username {} does not exist'.format(args.user))
-        return 1
-
-    return commands[args.command](args)
+    args.func(args, data)
 
 
 if __name__ == '__main__':
