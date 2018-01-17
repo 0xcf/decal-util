@@ -24,6 +24,8 @@ def _db():
 
 
 def _load_data():
+    """Load student and lab data from MySQL."""
+
     with _db() as c:
         c.execute('SELECT `name`, `fullname`, `track` FROM `labs`')
 
@@ -39,6 +41,8 @@ def _load_data():
 
 
 def checkoff(args, data):
+    """Add a row to the db representing a lab checkoff."""
+
     lab = args.lab
     user = args.user
     facilitator = getpass.getuser()
@@ -62,13 +66,15 @@ def checkoff(args, data):
                 user, lab
             ))
 
+    # multiple checkoffs not allowed by the unique constraint on the table
     except IntegrityError as e:
-        # multiple checkoffs not allowed by the unique constraint on the table
         print('Student probably already checked off.')
         return e
 
 
 def lab_completed_students(args, data):
+    """List which students have been checked off for a given lab."""
+
     lab = args.lab
 
     with _db() as c:
@@ -84,6 +90,8 @@ def lab_completed_students(args, data):
 
 
 def student_completed_labs(args, data):
+    """List which labs a given student has been checked off for."""
+
     user = args.user
 
     with _db() as c:
@@ -91,8 +99,8 @@ def student_completed_labs(args, data):
                   'WHERE `student` = %s', user)
 
     print('Checkoffs for student {} ({}) (track: {})'.format(
-        data['roster'][user]['name'],
-        user,
+        data['roster'][user]['name'],  # full name
+        user,                          # username
         data['roster'][user]['track'],
     ))
 
@@ -105,7 +113,6 @@ def student_completed_labs(args, data):
 
 
 def _mail_checkoff(user, lab, data):
-
     msg = 'Congratulations {}, you have been checked off for lab {} ({})'.format(
         data['roster'][user]['name'].split()[0],
         lab,
@@ -133,7 +140,8 @@ def main(argv=None):
             return user
         else:
             raise argparse.ArgumentTypeError(
-                'Username {} not enrolled or does not exist'.format(user))
+                'Username {} not enrolled or does not exist'.format(user)
+            )
 
     parser = argparse.ArgumentParser(
         description='Checkoff script for OCF/XCF UNIX SysAdmin DeCal.'
