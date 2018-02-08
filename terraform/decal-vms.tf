@@ -1,13 +1,21 @@
-variable "berkeley_subnets" { type = "list" }
-variable "berkeley_subnets6" { type = "list" }
-
 variable "do_token" {}
+variable "dnsimple_token" {}
+variable "dnsimple_account" {}
+
 variable "decal_ssh_fingerprint" { type = "list" }
 
 variable "students" { type = "list" }
 
+variable "berkeley_subnets" { type = "list" }
+variable "berkeley_subnets6" { type = "list" }
+
 provider "digitalocean" {
-    token = "${var.do_token}"
+    token = "${ var.do_token }"
+}
+
+provider "dnsimple" {
+    token   = "${ var.dnsimple_token }"
+    account = "${ var.dnsimple_account }"
 }
 
 resource "digitalocean_tag" "staff" {
@@ -24,9 +32,9 @@ resource "digitalocean_firewall" "student_firewall" {
 
     inbound_rule = [
         {
-            protocol         = "tcp"
-            port_range       = "1-65535"
-            source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
+            protocol           = "tcp"
+            port_range         = "1-65535"
+            source_addresses   = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
         },
         {
             protocol           = "udp"
@@ -34,8 +42,8 @@ resource "digitalocean_firewall" "student_firewall" {
             source_addresses   = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
         },
         {
-            protocol         = "icmp"
-            source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
+            protocol           = "icmp"
+            source_addresses   = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
         }
     ]
 }
@@ -46,7 +54,7 @@ resource "digitalocean_droplet" "staff" {
   region             = "sfo2"
   size               = "1gb"
   private_networking = "true"
-  ssh_keys           = [ "${var.decal_ssh_fingerprint}" ]
+  ssh_keys           = [ "${ var.decal_ssh_fingerprint }" ]
   tags               = [ "${ digitalocean_tag.staff.id }" ]
 }
 
@@ -70,4 +78,14 @@ output "staff_ip" {
 
 output "student_ips" {
   value = "${ digitalocean_droplet.students.*.ipv4_address }"
+}
+
+resource "dnsimple_record" "student-vms" {
+  count = "${ length(var.students) }"
+
+  domain = "xcf.sh"
+  name   = "${ element(var.students, count.index) }.decal"
+  type   = "A"
+  ttl    = 3600
+  value  = "${ element(digitalocean_droplet.students.*.ipv4_address, count.index) }"
 }
