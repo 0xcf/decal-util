@@ -25,12 +25,12 @@ resource "digitalocean_firewall" "student_firewall" {
     inbound_rule = [
         {
             protocol         = "tcp"
-            port_range     = "1-65535"
+            port_range       = "1-65535"
             source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
         },
         {
             protocol           = "udp"
-            port_range       = "1-65535"
+            port_range         = "1-65535"
             source_addresses   = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
         },
         {
