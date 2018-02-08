@@ -52,6 +52,7 @@ resource "digitalocean_firewall" "student_firewall" {
     },
     {
       protocol         = "icmp"
+      port_range       = "0"
       source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
     },
   ]
