@@ -52,10 +52,24 @@ resource "digitalocean_firewall" "student_firewall" {
     },
     {
       protocol         = "icmp"
-      port_range       = "0"
+      port_range       = ""
       source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
     },
   ]
+
+  outbound_rule = [
+    {
+      protocol              = "tcp"
+      port_range            = "1-65535"
+      destination_addresses = ["0.0.0.0/0", "::/0"]
+    },
+    {
+      protocol              = "udp"
+      port_range            = "1-65535"
+      destination_addresses = ["0.0.0.0/0", "::/0"]
+    },
+  ]
+
 }
 
 resource "digitalocean_droplet" "staff" {
@@ -80,14 +94,6 @@ resource "digitalocean_droplet" "students" {
   tags               = ["${ digitalocean_tag.student.id }"]
 }
 
-output "staff_ip" {
-  value = "${ digitalocean_droplet.staff.ipv4_address }"
-}
-
-output "student_ips" {
-  value = "${ digitalocean_droplet.students.*.ipv4_address }"
-}
-
 resource "dnsimple_record" "student-vms" {
   count = "${ length(var.students) }"
 
@@ -96,4 +102,28 @@ resource "dnsimple_record" "student-vms" {
   type   = "A"
   ttl    = 3600
   value  = "${ element(digitalocean_droplet.students.*.ipv4_address, count.index) }"
+}
+
+resource "dnsimple_record" "staff" {
+  domain = "xcf.sh"
+  name   = "staff.decal"
+  type   = "A"
+  ttl    = 3600
+  value  = "${ digitalocean_droplet.staff.ipv4_address }"
+}
+
+resource "dnsimple_record" "staff-puppet" {
+  domain = "xcf.sh"
+  name   = "puppet.decal"
+  type   = "CNAME"
+  ttl    = 3600
+  value  = "${ digitalocean_droplet.staff.name }"
+}
+
+output "staff_public_ip" {
+  value = "${ digitalocean_droplet.staff.ipv4_address }"
+}
+
+output "student_public_ips" {
+  value = "${ digitalocean_droplet.students.*.ipv4_address }"
 }
