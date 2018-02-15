@@ -18,6 +18,11 @@ variable "berkeley_subnets6" {
   type = "list"
 }
 
+variable "internal_subnet" {
+  type = "list"
+  default = [ "10.46.0.0/16" ]
+}
+
 provider "digitalocean" {
   token = "${ var.do_token }"
 }
@@ -43,17 +48,17 @@ resource "digitalocean_firewall" "student_firewall" {
     {
       protocol         = "tcp"
       port_range       = "1-65535"
-      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
+      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6, var.internal_subnet) }"
     },
     {
       protocol         = "udp"
       port_range       = "1-65535"
-      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
+      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6, var.internal_subnet) }"
     },
     {
       protocol         = "icmp"
       port_range       = ""
-      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6) }"
+      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6, var.internal_subnet) }"
     },
   ]
 
@@ -80,6 +85,17 @@ resource "digitalocean_droplet" "staff" {
   private_networking = "true"
   ssh_keys           = ["${ var.decal_ssh_fingerprint }"]
   tags               = ["${ digitalocean_tag.staff.id }"]
+}
+
+resource "digitalocean_droplet" "test" {
+  image              = "debian-9-x64"
+  name               = "test.decal.xcf.sh"
+  region             = "sfo2"
+  size               = "1gb"
+  private_networking = "true"
+  ssh_keys           = ["${ var.decal_ssh_fingerprint }"]
+  tags               = ["${ digitalocean_tag.staff.id }"]
+
 }
 
 resource "digitalocean_droplet" "students" {
@@ -110,6 +126,14 @@ resource "dnsimple_record" "staff" {
   type   = "A"
   ttl    = 3600
   value  = "${ digitalocean_droplet.staff.ipv4_address }"
+}
+
+resource "dnsimple_record" "test" {
+  domain = "xcf.sh"
+  name   = "test.decal"
+  type   = "A"
+  ttl    = 3600
+  value  = "${ digitalocean_droplet.test.ipv4_address }"
 }
 
 resource "dnsimple_record" "staff-puppet" {
