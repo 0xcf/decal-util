@@ -25,10 +25,12 @@ def _get_students(track):
         c.execute('SELECT `username` FROM `students` WHERE `track` = %s ORDER BY `username`', track)
         return [i['username'] for i in c]
 
+def _fqdnify(users):
+    return ["{}.decal.xcf.sh".format(user) for user in users]
 
 @task
 def powercycle(group):
-    hosts = [i + '.decal.xcf.sh' for i in _get_students(group)]
+    hosts = _fqdnify(_get_students(group))
     with settings(user='root'):
         execute(reboot, hosts=hosts)
 
@@ -40,6 +42,23 @@ def hostname():
 
 @task
 def list(group):
-    hosts = [i + '.decal.xcf.sh' for i in _get_students(group)]
+    hosts = _fqdnify(_get_students(group))
     with settings(user='root'):
         execute(hostname, hosts=hosts)
+
+def bootstrap_puppet():
+    run('apt install -y resolvconf')
+    run('echo "domain decal.xcf.sh" > /etc/resolvconf/resolv.conf.d/base')
+    run('resolvconf -u')
+    run('systemctl start resolvconf')
+    run('apt install puppet -y')
+    run('puppet agent -e')
+    run('puppet agent -t')
+
+@task
+def bootstrap(group):
+    hosts = _fqdnify(_get_students(group)):
+    with settings(user='root'):
+        execute(bootstrap_puppet, hosts=hosts)
+
+
