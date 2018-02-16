@@ -1,37 +1,3 @@
-variable "do_token" {}
-variable "dnsimple_token" {}
-variable "dnsimple_account" {}
-
-variable "decal_ssh_fingerprint" {
-  type = "list"
-}
-
-variable "students" {
-  type = "list"
-}
-
-variable "berkeley_subnets" {
-  type = "list"
-}
-
-variable "berkeley_subnets6" {
-  type = "list"
-}
-
-variable "internal_subnet" {
-  type = "list"
-  default = [ "10.46.0.0/16" ]
-}
-
-provider "digitalocean" {
-  token = "${ var.do_token }"
-}
-
-provider "dnsimple" {
-  token   = "${ var.dnsimple_token }"
-  account = "${ var.dnsimple_account }"
-}
-
 resource "digitalocean_tag" "staff" {
   name = "staff"
 }
@@ -40,41 +6,12 @@ resource "digitalocean_tag" "student" {
   name = "student"
 }
 
-resource "digitalocean_firewall" "student_firewall" {
-  name = "only-uc-berkeley"
-  tags = ["${ digitalocean_tag.staff.id }", "${ digitalocean_tag.student.id }"]
+resource "digitalocean_tag" "basic" {
+  name = "basic"
+}
 
-  inbound_rule = [
-    {
-      protocol         = "tcp"
-      port_range       = "1-65535"
-      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6, var.internal_subnet) }"
-    },
-    {
-      protocol         = "udp"
-      port_range       = "1-65535"
-      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6, var.internal_subnet) }"
-    },
-    {
-      protocol         = "icmp"
-      port_range       = ""
-      source_addresses = "${ concat(var.berkeley_subnets, var.berkeley_subnets6, var.internal_subnet) }"
-    },
-  ]
-
-  outbound_rule = [
-    {
-      protocol              = "tcp"
-      port_range            = "1-65535"
-      destination_addresses = ["0.0.0.0/0", "::/0"]
-    },
-    {
-      protocol              = "udp"
-      port_range            = "1-65535"
-      destination_addresses = ["0.0.0.0/0", "::/0"]
-    },
-  ]
-
+resource "digitalocean_tag" "advanced" {
+  name = "advanced"
 }
 
 resource "digitalocean_droplet" "staff" {
@@ -95,7 +32,6 @@ resource "digitalocean_droplet" "test" {
   private_networking = "true"
   ssh_keys           = ["${ var.decal_ssh_fingerprint }"]
   tags               = ["${ digitalocean_tag.staff.id }"]
-
 }
 
 resource "digitalocean_droplet" "students" {
@@ -107,41 +43,19 @@ resource "digitalocean_droplet" "students" {
   size               = "1gb"
   private_networking = "true"
   ssh_keys           = ["${ var.decal_ssh_fingerprint }"]
-  tags               = ["${ digitalocean_tag.student.id }"]
+  tags               = ["${ digitalocean_tag.student.id }", "${ digitalocean_tag.basic.id }"]
 }
 
-resource "dnsimple_record" "student-vms" {
-  count = "${ length(var.students) }"
+resource "digitalocean_droplet" "advanced_students" {
+  count = "${ length(var.advanced_students) }"
 
-  domain = "xcf.sh"
-  name   = "${ element(var.students, count.index) }.decal"
-  type   = "A"
-  ttl    = 3600
-  value  = "${ element(digitalocean_droplet.students.*.ipv4_address, count.index) }"
-}
-
-resource "dnsimple_record" "staff" {
-  domain = "xcf.sh"
-  name   = "staff.decal"
-  type   = "A"
-  ttl    = 3600
-  value  = "${ digitalocean_droplet.staff.ipv4_address }"
-}
-
-resource "dnsimple_record" "test" {
-  domain = "xcf.sh"
-  name   = "test.decal"
-  type   = "A"
-  ttl    = 3600
-  value  = "${ digitalocean_droplet.test.ipv4_address }"
-}
-
-resource "dnsimple_record" "staff-puppet" {
-  domain = "xcf.sh"
-  name   = "puppet.decal"
-  type   = "CNAME"
-  ttl    = 3600
-  value  = "${ digitalocean_droplet.staff.name }"
+  image              = "debian-9-x64"
+  name               = "${ element(var.advanced_students, count.index) }.decal.xcf.sh"
+  region             = "sfo2"
+  size               = "1gb"
+  private_networking = "true"
+  ssh_keys           = ["${ var.decal_ssh_fingerprint }"]
+  tags               = ["${ digitalocean_tag.student.id }", "${ digitalocean_tag.advanced.id }"]
 }
 
 output "staff_public_ip" {
@@ -150,4 +64,16 @@ output "staff_public_ip" {
 
 output "student_public_ips" {
   value = "${ digitalocean_droplet.students.*.ipv4_address }"
+}
+
+output "advanced_student_public_ips" {
+  value = "${ digitalocean_droplet.advanced_students.*.ipv4_address }"
+}
+
+output "student_private_ips" {
+  value = "${ digitalocean_droplet.students.*.ipv4_address_private }"
+}
+
+output "advanced_student_private_ips" {
+  value = "${ digitalocean_droplet.advanced_students.*.ipv4_address_private }"
 }
