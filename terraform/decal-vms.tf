@@ -46,17 +46,17 @@ resource "digitalocean_droplet" "students" {
   tags               = ["${ digitalocean_tag.student.id }", "${ digitalocean_tag.basic.id }"]
 }
 
-resource "digitalocean_droplet" "advanced_students" {
-  count = "${ length(var.advanced_students) }"
+# resource "digitalocean_droplet" "advanced_students" {
+#   count = "${ length(var.advanced_students) }"
 
-  image              = "debian-9-x64"
-  name               = "${ element(var.advanced_students, count.index) }.decal.xcf.sh"
-  region             = "sfo2"
-  size               = "1gb"
-  private_networking = "true"
-  ssh_keys           = ["${ var.decal_ssh_fingerprint }"]
-  tags               = ["${ digitalocean_tag.student.id }", "${ digitalocean_tag.advanced.id }"]
-}
+#   image              = "debian-9-x64"
+#   name               = "${ element(var.advanced_students, count.index) }.decal.xcf.sh"
+#   region             = "sfo2"
+#   size               = "1gb"
+#   private_networking = "true"
+#   ssh_keys           = ["${ var.decal_ssh_fingerprint }"]
+#   tags               = ["${ digitalocean_tag.student.id }", "${ digitalocean_tag.advanced.id }"]
+# }
 
 output "staff_public_ip" {
   value = "${ digitalocean_droplet.staff.ipv4_address }"
@@ -66,14 +66,14 @@ output "student_public_ips" {
   value = "${ digitalocean_droplet.students.*.ipv4_address }"
 }
 
-output "advanced_student_public_ips" {
-  value = "${ digitalocean_droplet.advanced_students.*.ipv4_address }"
-}
+# output "advanced_student_public_ips" {
+#   value = "${ digitalocean_droplet.advanced_students.*.ipv4_address }"
+# }
 
 output "student_private_ips" {
   value = "${ digitalocean_droplet.students.*.ipv4_address_private }"
 }
 
-output "advanced_student_private_ips" {
-  value = "${ digitalocean_droplet.advanced_students.*.ipv4_address_private }"
-}
+# output "advanced_student_private_ips" {
+#   value = "${ digitalocean_droplet.advanced_students.*.ipv4_address_private }"
+# }
