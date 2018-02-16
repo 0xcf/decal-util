@@ -1,5 +1,12 @@
 import configparser
-from fabric.api import *
+
+from fabric.api import env
+from fabric.api import execute
+from fabric.api import parallel
+from fabric.api import reboot
+from fabric.api import run
+from fabric.api import settings
+from fabric.api import task
 from ocflib.infra.db import get_connection
 
 env.use_ssh_config = True
@@ -25,8 +32,10 @@ def _get_students(track):
         c.execute('SELECT `username` FROM `students` WHERE `track` = %s ORDER BY `username`', track)
         return [i['username'] for i in c]
 
+
 def _fqdnify(users):
-    return ["{}.decal.xcf.sh".format(user) for user in users]
+    return ['{}.decal.xcf.sh'.format(user) for user in users]
+
 
 @task
 def powercycle(group):
@@ -46,6 +55,7 @@ def list(group):
     with settings(user='root'):
         execute(hostname, hosts=hosts)
 
+
 def bootstrap_puppet():
     run('apt install -y resolvconf')
     run('echo "domain decal.xcf.sh" > /etc/resolvconf/resolv.conf.d/base')
@@ -55,10 +65,9 @@ def bootstrap_puppet():
     run('puppet agent -e')
     run('puppet agent -t')
 
+
 @task
 def bootstrap(group):
-    hosts = _fqdnify(_get_students(group)):
+    hosts = _fqdnify(_get_students(group))
     with settings(user='root'):
         execute(bootstrap_puppet, hosts=hosts)
-
-
