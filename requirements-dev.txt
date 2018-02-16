@@ -1,2 +1,4 @@
+configparser
+Fabric
 ocflib
 pre-commit
