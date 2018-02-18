@@ -3,11 +3,11 @@ import configparser
 from fabric.api import env
 from fabric.api import execute
 from fabric.api import parallel
-from fabric.api import reboot
 from fabric.api import run
 from fabric.api import settings
 from fabric.api import task
 from ocflib.infra.db import get_connection
+# from fabric.api import reboot
 
 env.use_ssh_config = True
 
@@ -26,7 +26,7 @@ def _db():
 
 
 def _get_students(track):
-    
+
     assert track in ('test', 'staff', 'basic', 'advanced'), 'invalid track: %s' % track
 
     if track == 'test' or track == 'staff':
@@ -43,6 +43,7 @@ def _fqdnify(users):
 
 def restart():
     return run('reboot now')
+
 
 @task
 def powercycle(group):
@@ -64,12 +65,13 @@ def list(group):
 
 
 def bootstrap_puppet():
-    run('apt install -y resolvconf')
+    run('apt -qq update')
+    run('apt -qq install -y resolvconf')
     run('echo "domain decal.xcf.sh" > /etc/resolvconf/resolv.conf.d/base')
     run('resolvconf -u')
     run('systemctl start resolvconf')
-    run('apt install puppet -y')
-    run('puppet agent -t')
+    run('apt -qq install puppet -y')
+    run('puppet agent --daemonize')
 
 
 @task
