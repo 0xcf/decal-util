@@ -26,7 +26,11 @@ def _db():
 
 
 def _get_students(track):
-    assert track in ('basic', 'advanced'), 'invalid track: %s' % track
+    
+    assert track in ('test', 'staff', 'basic', 'advanced'), 'invalid track: %s' % track
+
+    if track == 'test' or track == 'staff':
+        return (track,)
 
     with _db() as c:
         c.execute('SELECT `username` FROM `students` WHERE `track` = %s ORDER BY `username`', track)
@@ -37,11 +41,14 @@ def _fqdnify(users):
     return ['{}.decal.xcf.sh'.format(user) for user in users]
 
 
+def restart():
+    return run('reboot now')
+
 @task
 def powercycle(group):
     hosts = _fqdnify(_get_students(group))
     with settings(user='root'):
-        execute(reboot, hosts=hosts)
+        execute(restart, hosts=hosts)
 
 
 @parallel
@@ -62,7 +69,6 @@ def bootstrap_puppet():
     run('resolvconf -u')
     run('systemctl start resolvconf')
     run('apt install puppet -y')
-    run('puppet agent -e')
     run('puppet agent -t')
 
 
