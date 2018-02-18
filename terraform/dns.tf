@@ -39,5 +39,5 @@ resource "dnsimple_record" "staff-puppet" {
   name   = "puppet.decal"
   type   = "A"
   ttl    = 3600
-  value  = "${ digitalocean_droplet.staff.ipv4_address_private }"
+  value  = "${ digitalocean_droplet.staff.ipv4_address }"
 }
