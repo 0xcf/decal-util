@@ -1,4 +1,21 @@
+# Emacs swap files
+*~
+\#*\#
+
+# Vim swap files
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-v][a-z]
+[._]sw[a-p]
+
+
+# Python stuff
 *.py[co]
 /venv
-*.tfstate
+
+# Terraform stuff
 *.auto.tfvars
+*.tfstate
+
+# Mysql auth file
+mysql.conf
