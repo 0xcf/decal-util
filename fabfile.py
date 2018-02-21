@@ -18,6 +18,7 @@ env.use_ssh_config = True
 MYSQL_CONFIG_FILE = 'mysql.conf'
 PW_LENGTH = 16
 
+
 def _db():
     conf = configparser.ConfigParser()
     conf.read(MYSQL_CONFIG_FILE)
@@ -38,7 +39,7 @@ def _get_students(track):
 
     with _db() as c:
         c.execute('SELECT `username` FROM `students` WHERE `track` = %s ORDER BY `username`', track)
-        return [i['username'] for i in c]
+        return [i['username'] for i in c if not i['username'].startswith('test')]
 
 
 def _fqdnify(users):
@@ -104,7 +105,7 @@ def create_user():
 
     # TODO: This isn't great, we would ideally fetch student names when we
     # fetch their usernames for the hostnames
-    name = ""
+    name = ''
     with _db() as c:
         c.execute('SELECT `name` FROM `students` WHERE `username` = %s', username)
         name = c.fetchone()['name']
