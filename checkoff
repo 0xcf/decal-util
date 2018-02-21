@@ -62,7 +62,7 @@ def checkoff(args, data):
             c.execute('INSERT INTO `checkoffs` (`lab`, `student`, `facilitator`)'
                       'VALUES (%s, %s, %s)', (lab, user, facilitator))
 
-            _mail_checkoff(user, lab, data, comment)
+            _mail_checkoff(user, lab, data, comment='')
             print('Checked {} off for lab {} and emailed them confirmation with comment: {}.'.format(
                 user, lab, comment
             ))
@@ -178,7 +178,7 @@ def main(argv=None):
         'lab', type=validate_lab, help='lab identifier (e.g. a1, b1)'
     )
     parse_checkoff.add_argument(
-        'comment', help='Additional comments in mail confirmation'
+        '--comment', help='Additional comments in mail confirmation'
     )
     parser_checkoff.set_defaults(func=checkoff)
 
