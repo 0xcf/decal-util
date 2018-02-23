@@ -45,6 +45,7 @@ def checkoff(args, data):
 
     lab = args.lab
     user = args.user
+    comment = args.comment
     facilitator = getpass.getuser()
 
     # verify the user is in the track they're being checked off for
@@ -61,9 +62,9 @@ def checkoff(args, data):
             c.execute('INSERT INTO `checkoffs` (`lab`, `student`, `facilitator`)'
                       'VALUES (%s, %s, %s)', (lab, user, facilitator))
 
-            _mail_checkoff(user, lab, data)
-            print('Checked {} off for lab {} and emailed them confirmation.'.format(
-                user, lab
+            _mail_checkoff(user, lab, data, comment)
+            print('Checked {} off for lab {} and emailed them confirmation with comment: {}.'.format(
+                user, lab, comment
             ))
 
     # multiple checkoffs not allowed by the unique constraint on the table
@@ -112,11 +113,12 @@ def student_completed_labs(args, data):
         ))
 
 
-def _mail_checkoff(user, lab, data):
-    msg = 'Congratulations {}, you have been checked off for lab {} ({})'.format(
+def _mail_checkoff(user, lab, data, comment=''):
+    msg = 'Congratulations {}, you have been checked off for lab {} ({}) \n\n\n{}'.format(
         data['roster'][user]['name'].split()[0],
         lab,
         data['labs'][lab]['fullname'],
+        comment,
     )
     subject = 'Unix SysAdmin DeCal Checkoff for Lab {}'.format(lab)
     recipient = '{}@ocf.berkeley.edu'.format(user)
@@ -174,6 +176,9 @@ def main(argv=None):
     )
     parser_checkoff.add_argument(
         'lab', type=validate_lab, help='lab identifier (e.g. a1, b1)'
+    )
+    parser_checkoff.add_argument(
+        '--comment', help='Additional comments in mail confirmation'
     )
     parser_checkoff.set_defaults(func=checkoff)
 
