@@ -1,5 +1,6 @@
 import configparser
 import crypt
+import os
 import random
 import string
 from textwrap import dedent
@@ -15,13 +16,16 @@ from ocflib.misc.mail import send_mail
 
 env.use_ssh_config = True
 
-MYSQL_CONFIG_FILE = 'mysql.conf'
+MYSQL_DEFAULT_CONFIG = 'mysql.conf'
 PW_LENGTH = 16
 
 
 def _db():
     conf = configparser.ConfigParser()
-    conf.read(MYSQL_CONFIG_FILE)
+    if os.path.exists('mysql.conf'):
+        conf.read('mysql.conf')
+    else:
+        conf.read(MYSQL_DEFAULT_CONFIG)
 
     return get_connection(
         user=conf.get('mysql', 'user'),
@@ -32,14 +36,14 @@ def _db():
 
 def _get_students(track):
 
-    assert track in ('test', 'staff', 'basic', 'advanced'), 'invalid track: %s' % track
+    assert track in ('test', 'staff', 'decal', 'basic', 'advanced'), 'invalid track: %s' % track
 
-    if track == 'test' or track == 'staff':
+    if track in ('test', 'staff', 'decal'):
         return (track,)
 
     with _db() as c:
         c.execute('SELECT `username` FROM `students` WHERE `track` = %s ORDER BY `username`', track)
-        return [i['username'] for i in c if not i['username'].startswith('test')]
+        return [i['username'] for i in c if i['username'] != 'decal']
 
 
 def _fqdnify(users):

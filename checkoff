@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 import argparse
+import configparser
 import getpass
+import os
 import sys
 
-import configparser
 from ocflib.account.search import user_exists
 from ocflib.infra.db import get_connection
 from ocflib.misc.mail import send_mail
 from pymysql.err import IntegrityError
 
-MYSQL_CONFIG_FILE = 'mysql.conf'
+MYSQL_DEFAULT_CONFIG = '/etc/decal_mysql.conf'
 
 
 def _db():
     conf = configparser.ConfigParser()
-    conf.read(MYSQL_CONFIG_FILE)
+    if os.path.exists('mysql.conf'):
+        conf.read('mysql.conf')
+    else:
+        conf.read(MYSQL_DEFAULT_CONFIG)
 
     return get_connection(
         user=conf.get('mysql', 'user'),
