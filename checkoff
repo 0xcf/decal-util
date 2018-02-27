@@ -66,7 +66,7 @@ def checkoff(args, data):
             c.execute('INSERT INTO `checkoffs` (`lab`, `student`, `facilitator`)'
                       'VALUES (%s, %s, %s)', (lab, user, facilitator))
 
-            _mail_checkoff(user, lab, data, comment)
+            _mail_checkoff(user, lab, data, facilitator, comment)
             print('Checked {} off for lab {} and emailed them confirmation with comment: {}.'.format(
                 user, lab, comment
             ))
@@ -117,11 +117,12 @@ def student_completed_labs(args, data):
         ))
 
 
-def _mail_checkoff(user, lab, data, comment=''):
-    msg = 'Congratulations {}, you have been checked off for lab {} ({}) \n\n\n{}'.format(
+def _mail_checkoff(user, lab, data, facilitator, comment=''):
+    msg = 'Congratulations {}, you have been checked off for lab {} ({}) by {}\n\nComments: {}'.format(
         data['roster'][user]['name'].split()[0],
         lab,
         data['labs'][lab]['fullname'],
+        facilitator,
         comment,
     )
     subject = 'Unix SysAdmin DeCal Checkoff for Lab {}'.format(lab)
