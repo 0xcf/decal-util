@@ -12,7 +12,7 @@ DATA_FILE = sys.argv[1]
 
 SUBJECT = '[UNIX SysAdmin Decal] Attendance and Lab Report'
 FROM = 'decal@ocf.berkeley.edu'
-CC = 'decal@ocf.berkeley.edu'
+CC = 'decal+attendance@ocf.berkeley.edu'
 
 message = dedent('''
 Hello {name},
@@ -31,6 +31,7 @@ Please note that this does not include labs that you have submitted but are pend
 As a reminder, you need to complete at least 8/10 labs to pass the course.
 
 If you think there are any errors in the above report, please contact us ASAP so we can resolve the issue.
+Reply to this email or make a post on Piazza to get in touch.
 
 Best,
 Unix SysAdmin DeCal staff
@@ -46,9 +47,10 @@ with open(DATA_FILE, 'r') as d:
             print(e)
             continue
         email = '{}@ocf.berkeley.edu'.format(student)
-        send_mail(email,
-                  SUBJECT,
-                  message.format(name=student, absences=absences, labs=labs),
-                  cc=CC,
-                  sender=FROM,
+        send_mail(
+                email,
+                SUBJECT,
+                message.format(name=student, absences=absences, labs=labs),
+                cc=CC,
+                sender=FROM,
         )
