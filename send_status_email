@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+import subprocess
+import sys
+from textwrap import dedent
+
+from ocflib.misc.mail import send_mail
+
+# TSV or space separated file of username \t # of unexcused absences
+# e.g. abizer   2
+DATA_FILE = sys.argv[1]
+
+SUBJECT = '[UNIX SysAdmin Decal] Attendance and Lab Report'
+FROM = 'decal@ocf.berkeley.edu'
+CC = 'decal+attendance@ocf.berkeley.edu'
+
+message = dedent('''
+Hello {name},
+
+This is a status update for your current standing in the course.
+
+Our records indicate you have {absences} unexcused absences. As a reminder, more than two unexcused absences is
+grounds for NPing the course. Note that this figure does not include the final survey, which will allow you to waive
+one of the unexcused absences. You can find a link to the survey on Piazza.
+
+Our records indicate that you have been checked off for the following labs:
+
+{labs}
+
+Please note that this does not include labs that you have submitted but are pending to be checked off by a facilitator.
+As a reminder, you need to complete at least 8/10 labs to pass the course.
+
+If you think there are any errors in the above report, please contact us ASAP so we can resolve the issue.
+Reply to this email or make a post on Piazza to get in touch.
+
+Best,
+Unix SysAdmin DeCal staff
+''').strip()
+
+with open(DATA_FILE, 'r') as d:
+    for i in d.read().strip().split('\n'):
+        student, absences = i.split()
+        try:
+            labs = subprocess.check_output(['./checkoff', 'view', student]).decode('utf-8').strip()
+        except subprocess.CalledProcessError as e:
+            # This is mostly in case you fatfinger someone's username, it'll just skip it
+            print(e)
+            continue
+        email = '{}@ocf.berkeley.edu'.format(student)
+        send_mail(
+                email,
+                SUBJECT,
+                message.format(name=student, absences=absences, labs=labs),
+                cc=CC,
+                sender=FROM,
+        )
