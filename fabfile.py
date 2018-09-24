@@ -93,6 +93,10 @@ def create_user():
     # password immediately upon login
     run('chage -d 0 {}'.format(username))
 
+    # make sure password authentication is on so students can log in
+    # it appears it gets turned off now if you supply a root ssh key
+    run("sed -i '/^PasswordAuthentication no/d' /etc/ssh/sshd_config && systemctl reload ssh")
+
     # Send an email out to the user with their new password
     message = dedent("""
         Hello {username},
@@ -129,3 +133,16 @@ def create_users(group):
     hosts = _fqdnify(_get_students(group))
     with settings(user='root'):
         execute(create_user, hosts=hosts)
+
+
+def enable_ssh_password_auth():
+    # turn on password authentication again
+    run("sed -i '/^PasswordAuthentication no/d' /etc/ssh/sshd_config")
+    run('systemctl reload ssh')
+
+
+@task
+def fix_ssh_password_auth(group):
+    hosts = _fqdnify(_get_students(group))
+    with settings(user='root'):
+        execute(enable_ssh_password_auth, hosts=hosts)
