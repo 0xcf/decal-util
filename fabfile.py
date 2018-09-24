@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import configparser
 import crypt
 import os
@@ -18,6 +19,7 @@ env.use_ssh_config = True
 
 MYSQL_DEFAULT_CONFIG = 'mysql.conf'
 PW_LENGTH = 16
+CURRENT_SEMESTER_FKID = '4'
 
 
 def _db():
@@ -36,18 +38,19 @@ def _db():
 
 def _get_students(track):
 
-    assert track in ('test', 'staff', 'decal', 'basic', 'advanced'), 'invalid track: %s' % track
-
-    if track in ('test', 'staff', 'decal'):
-        return (track,)
+    assert track in ('basic', 'advanced'), 'invalid track: %s' % track
 
     with _db() as c:
-        c.execute('SELECT `username` FROM `students` WHERE `track` = %s ORDER BY `username`', track)
-        return [i['username'] for i in c if i['username'] != 'decal']
+        c.execute('SELECT `username` FROM `students` WHERE `track` = %s AND `semester` = %s ORDER BY `username`',
+                  (track, CURRENT_SEMESTER_FKID,))
+
+    for i in c.fetchall():
+        yield i['username']
 
 
 def _fqdnify(users):
-    return ['{}.decal.xcf.sh'.format(user) for user in users]
+    for user in users:
+        yield '{}.decal.xcf.sh'.format(user)
 
 
 def restart():
@@ -69,25 +72,8 @@ def hostname():
 @task
 def list(group):
     hosts = _fqdnify(_get_students(group))
-    with settings(user='root'):
+    with settings(user='root', key_filename='~/.ssh/id_decal'):
         execute(hostname, hosts=hosts)
-
-
-def bootstrap_puppet():
-    run('apt -qq update')
-    run('apt -qq install -y resolvconf')
-    run('echo "domain decal.xcf.sh" > /etc/resolvconf/resolv.conf.d/base')
-    run('resolvconf -u')
-    run('systemctl start resolvconf')
-    run('apt -qq install puppet -y')
-    run('puppet agent --daemonize')
-
-
-@task
-def bootstrap(group):
-    hosts = _fqdnify(_get_students(group))
-    with settings(user='root'):
-        execute(bootstrap_puppet, hosts=hosts)
 
 
 def create_user():
@@ -107,29 +93,15 @@ def create_user():
     # password immediately upon login
     run('chage -d 0 {}'.format(username))
 
-    # TODO: This isn't great, we would ideally fetch student names when we
-    # fetch their usernames for the hostnames
-    name = ''
-    with _db() as c:
-        c.execute('SELECT `name` FROM `students` WHERE `username` = %s', username)
-        name = c.fetchone()['name']
-
-    assert(name)
-
     # Send an email out to the user with their new password
     message = dedent("""
-        Hello {name},
+        Hello {username},
 
-        We have created a virtual machine for you for the UNIX SysAdmin DeCal!
-
-        Please note that you can only connect to your VM from inside the
-        Berkeley network, so you will have to either be on campus wifi, or you
-        will have to SSH through ssh.ocf.berkeley.edu (or a similar on-campus
-        host) to access your VM.
+        We have created a virtual machine for you for the Linux SysAdmin DeCal!
 
         You should be able to connect to it at {hostname} by running
         'ssh {username}@{hostname}' and entering your temporary
-        password {password}
+        password {password}.
 
         You should see a prompt to change your temporary password to something
         more secure after your first login.
@@ -141,11 +113,10 @@ def create_user():
 
     send_mail(
         '{}@ocf.berkeley.edu'.format(username),
-        '[UNIX SysAdmin DeCal] Virtual Machine Login',
+        '[Linux SysAdmin DeCal] Virtual Machine Information',
         message.format(
-            name=name,
-            hostname=env.host,
             username=username,
+            hostname=env.host,
             password=password,
         ),
         cc='decal+vms@ocf.berkeley.edu',

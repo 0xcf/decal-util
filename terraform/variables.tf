@@ -8,6 +8,11 @@ variable "decal_ssh_fingerprint" {
   default = ["e5:95:8d:ac:35:81:f3:ec:9a:57:2a:23:b8:2f:19:7c"]
 }
 
+variable "default_vm_size" {
+  type = "string"
+  default = "s-1vcpu-1gb"
+}
+
 variable "students" {
   type = "list"
 }
